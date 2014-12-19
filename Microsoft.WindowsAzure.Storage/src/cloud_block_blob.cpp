@@ -20,7 +20,7 @@
 #include "wascore/protocol_xml.h"
 #include "wascore/blobstreams.h"
 
-namespace wa { namespace storage {
+namespace azure { namespace storage {
 
     pplx::task<void> cloud_block_blob::upload_block_async(const utility::string_t& block_id, concurrency::streams::istream block_data, const utility::string_t& content_md5, const access_condition& condition, const blob_request_options& options, operation_context context) const
     {
@@ -32,10 +32,10 @@ namespace wa { namespace storage {
 
         auto command = std::make_shared<core::storage_command<void>>(uri());
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response(std::bind(protocol::preprocess_response, std::placeholders::_1, std::placeholders::_2));
+        command->set_preprocess_response(std::bind(protocol::preprocess_response_void, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         return core::istream_descriptor::create(block_data, needs_md5).then([command, context, block_id, content_md5, modified_options, condition] (core::istream_descriptor request_body) -> pplx::task<void>
         {
-            auto md5 = content_md5.empty() ? request_body.content_md5() : content_md5;
+            const utility::string_t& md5 = content_md5.empty() ? request_body.content_md5() : content_md5;
             command->set_build_request(std::bind(protocol::put_block, block_id, md5, condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
             command->set_request_body(request_body);
             return core::executor<void>::execute_async(command, modified_options, context);
@@ -49,16 +49,16 @@ namespace wa { namespace storage {
         modified_options.apply_defaults(service_client().default_request_options(), type());
 
         protocol::block_list_writer writer;
-        concurrency::streams::istream stream(concurrency::streams::bytestream::open_istream(std::move(writer.write(block_list))));
+        concurrency::streams::istream stream(concurrency::streams::bytestream::open_istream(writer.write(block_list)));
 
         auto properties = m_properties;
         
         auto command = std::make_shared<core::storage_command<void>>(uri());
         command->set_build_request(std::bind(protocol::put_block_list, *properties, metadata(), condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response([properties] (const web::http::http_response& response, operation_context context)
+        command->set_preprocess_response([properties] (const web::http::http_response& response, const request_result& result, operation_context context)
         {
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
         });
         return core::istream_descriptor::create(stream).then([command, context, modified_options] (core::istream_descriptor request_body) -> pplx::task<void>
@@ -79,16 +79,16 @@ namespace wa { namespace storage {
         command->set_build_request(std::bind(protocol::get_block_list, listing_filter, snapshot_time(), condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
         command->set_location_mode(core::command_location_mode::primary_or_secondary);
-        command->set_preprocess_response([properties] (const web::http::http_response& response, operation_context context) -> std::vector<block_list_item>
+        command->set_preprocess_response([properties] (const web::http::http_response& response, const request_result& result, operation_context context) -> std::vector<block_list_item>
         {
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
             return std::vector<block_list_item>();
         });
         command->set_postprocess_response([] (const web::http::http_response& response, const request_result&, const core::ostream_descriptor&, operation_context context) -> pplx::task<std::vector<block_list_item>>
         {
             protocol::block_list_reader reader(response.body());
-            return pplx::task_from_result(reader.extract_result());
+            return pplx::task_from_result(reader.move_result());
         });
         return core::executor<std::vector<block_list_item>>::execute_async(command, modified_options, context);
     }
@@ -137,32 +137,45 @@ namespace wa { namespace storage {
 
     pplx::task<void> cloud_block_blob::upload_from_stream_async(concurrency::streams::istream source, utility::size64_t length, const access_condition& condition, const blob_request_options& options, operation_context context)
     {
+        // TODO: Consider providing an overload for concurrency::streams::wistream
+
         assert_no_snapshot();
         blob_request_options modified_options(options);
         modified_options.apply_defaults(service_client().default_request_options(), type());
 
-        if (length == protocol::invalid_size64_t)
+        // This will be std::numeric_limits<utility::size64_t>::max() if the stream is not seekable.
+        utility::size64_t remaining_stream_length = core::get_remaining_stream_length(source);
+
+        // Before this line, 'length = max' means "no length was given by the user."  After this line, 'length = max' means "no length was given, and the stream is not seekable."
+        if (length == std::numeric_limits<utility::size64_t>::max())
         {
-            length = core::get_remaining_stream_length(source);
+            length = remaining_stream_length;
         }
 
-        auto properties = m_properties;
-        auto metadata = m_metadata;
+        // If the stream is seekable, check for the case where the stream is too short.
+        // If the stream is not seekable, this will be caught later, when we run out of bytes in the stream when uploading.
+        if (source.can_seek() && (length > remaining_stream_length))
+        {
+            throw std::invalid_argument(protocol::error_stream_short);
+        }
 
-        if ((length != protocol::invalid_size64_t) &&
+        if ((length != std::numeric_limits<utility::size64_t>::max()) &&
             (length <= modified_options.single_blob_upload_threshold_in_bytes()) &&
             (modified_options.parallelism_factor() == 1))
         {
             if (modified_options.use_transactional_md5() && !modified_options.store_blob_content_md5())
             {
-                throw std::invalid_argument(utility::conversions::to_utf8string(protocol::error_md5_options_mismatch));
+                throw std::invalid_argument(protocol::error_md5_options_mismatch);
             }
+
+            auto properties = m_properties;
+            auto metadata = m_metadata;
 
             auto command = std::make_shared<core::storage_command<void>>(uri());
             command->set_authentication_handler(service_client().authentication_handler());
-            command->set_preprocess_response([properties] (const web::http::http_response& response, operation_context context)
+            command->set_preprocess_response([properties] (const web::http::http_response& response, const request_result& result, operation_context context)
             {
-                protocol::preprocess_response(response, context);
+                protocol::preprocess_response_void(response, result, context);
                 properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
             });
             return core::istream_descriptor::create(source, modified_options.store_blob_content_md5(), length).then([command, context, properties, metadata, condition, modified_options] (core::istream_descriptor request_body) -> pplx::task<void>
@@ -187,6 +200,21 @@ namespace wa { namespace storage {
         });
     }
 
+    pplx::task<void> cloud_block_blob::upload_from_file_async(const utility::string_t &path, const access_condition& condition, const blob_request_options& options, operation_context context)
+    {
+        auto instance = std::make_shared<cloud_block_blob>(*this);
+        return concurrency::streams::file_stream<uint8_t>::open_istream(path).then([instance, condition, options, context] (concurrency::streams::istream stream) -> pplx::task<void>
+        {
+            return instance->upload_from_stream_async(stream, condition, options, context).then([stream] (pplx::task<void> upload_task) -> pplx::task<void>
+            {
+                return stream.close().then([upload_task] ()
+                {
+                    upload_task.wait();
+                });
+            });
+        });
+    }
+
     pplx::task<void> cloud_block_blob::upload_text_async(const utility::string_t& content, const access_condition& condition, const blob_request_options& options, operation_context context)
     {
         auto utf8_body = utility::conversions::to_utf8string(content);
@@ -205,7 +233,7 @@ namespace wa { namespace storage {
         {
             if (properties->content_type() != protocol::header_value_content_type_utf8)
             {
-                throw std::logic_error(utility::conversions::to_utf8string(protocol::error_unsupported_text_blob));
+                throw std::logic_error(protocol::error_unsupported_text_blob);
             }
 
             std::string utf8_body(reinterpret_cast<char*>(buffer.collection().data()), static_cast<unsigned int>(buffer.size()));
@@ -213,4 +241,4 @@ namespace wa { namespace storage {
         });
     }
 
-}} // namespace wa::storage
+}} // namespace azure::storage

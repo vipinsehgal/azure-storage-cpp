@@ -22,46 +22,46 @@
 #include "wascore/blobstreams.h"
 #include "wascore/util.h"
 
-namespace wa { namespace storage {
+namespace azure { namespace storage {
 
-    cloud_blob::cloud_blob(const storage_uri& uri)
-        : m_uri(uri), m_metadata(std::make_shared<cloud_metadata>()), m_properties(std::make_shared<cloud_blob_properties>()),
-        m_copy_state(std::make_shared<wa::storage::copy_state>())
+    cloud_blob::cloud_blob(storage_uri uri)
+        : m_uri(std::move(uri)), m_metadata(std::make_shared<cloud_metadata>()), m_properties(std::make_shared<cloud_blob_properties>()),
+        m_copy_state(std::make_shared<azure::storage::copy_state>())
     {
         init(utility::string_t(), storage_credentials());
     }
 
-    cloud_blob::cloud_blob(const storage_uri& uri, const storage_credentials& credentials)
-        : m_uri(uri), m_metadata(std::make_shared<cloud_metadata>()), m_properties(std::make_shared<cloud_blob_properties>()),
-        m_copy_state(std::make_shared<wa::storage::copy_state>())
+    cloud_blob::cloud_blob(storage_uri uri, storage_credentials credentials)
+        : m_uri(std::move(uri)), m_metadata(std::make_shared<cloud_metadata>()), m_properties(std::make_shared<cloud_blob_properties>()),
+        m_copy_state(std::make_shared<azure::storage::copy_state>())
     {
-        init(utility::string_t(), credentials);
+        init(utility::string_t(), std::move(credentials));
     }
 
-    cloud_blob::cloud_blob(const storage_uri& uri, const utility::string_t& snapshot_time, const storage_credentials& credentials)
-        : m_uri(uri), m_metadata(std::make_shared<cloud_metadata>()), m_properties(std::make_shared<cloud_blob_properties>()),
-        m_copy_state(std::make_shared<wa::storage::copy_state>())
+    cloud_blob::cloud_blob(storage_uri uri, utility::string_t snapshot_time, storage_credentials credentials)
+        : m_uri(std::move(uri)), m_metadata(std::make_shared<cloud_metadata>()), m_properties(std::make_shared<cloud_blob_properties>()),
+        m_copy_state(std::make_shared<azure::storage::copy_state>())
     {
-        init(snapshot_time, credentials);
+        init(std::move(snapshot_time), std::move(credentials));
     }
 
-    cloud_blob::cloud_blob(const utility::string_t& name, const utility::string_t& snapshot_time, const cloud_blob_container& container)
-        : m_name(name), m_snapshot_time(snapshot_time), m_container(container), m_uri(core::append_path_to_uri(container.uri(), name)),
+    cloud_blob::cloud_blob(utility::string_t name, utility::string_t snapshot_time, cloud_blob_container container)
+        : m_name(std::move(name)), m_snapshot_time(std::move(snapshot_time)), m_container(std::move(container)), m_uri(core::append_path_to_uri(m_container.uri(), m_name)),
         m_metadata(std::make_shared<cloud_metadata>()), m_properties(std::make_shared<cloud_blob_properties>()),
-        m_copy_state(std::make_shared<wa::storage::copy_state>())
+        m_copy_state(std::make_shared<azure::storage::copy_state>())
     {
     }
 
-    cloud_blob::cloud_blob(utility::string_t name, utility::string_t snapshot_time, const cloud_blob_container& container, cloud_blob_properties properties, cloud_metadata metadata, wa::storage::copy_state copy_state)
-        : m_name(std::move(name)), m_snapshot_time(std::move(snapshot_time)), m_container(container), m_uri(core::append_path_to_uri(container.uri(), name)),
+    cloud_blob::cloud_blob(utility::string_t name, utility::string_t snapshot_time, cloud_blob_container container, cloud_blob_properties properties, cloud_metadata metadata, azure::storage::copy_state copy_state)
+        : m_name(std::move(name)), m_snapshot_time(std::move(snapshot_time)), m_container(std::move(container)), m_uri(core::append_path_to_uri(m_container.uri(), m_name)),
         m_metadata(std::make_shared<cloud_metadata>(std::move(metadata))), m_properties(std::make_shared<cloud_blob_properties>(std::move(properties))),
-        m_copy_state(std::make_shared<wa::storage::copy_state>(std::move(copy_state)))
+        m_copy_state(std::make_shared<azure::storage::copy_state>(std::move(copy_state)))
     {
     }
 
-    void cloud_blob::init(const utility::string_t& snapshot_time, storage_credentials credentials)
+    void cloud_blob::init(utility::string_t snapshot_time, storage_credentials credentials)
     {
-        m_snapshot_time = snapshot_time;
+        m_snapshot_time = std::move(snapshot_time);
         m_uri = core::verify_blob_uri(m_uri, credentials, m_snapshot_time);
 
         utility::string_t container_name;
@@ -70,7 +70,7 @@ namespace wa { namespace storage {
             throw std::invalid_argument("uri");
         }
 
-        m_container = cloud_blob_container(container_name, cloud_blob_client(core::get_service_client_uri(m_uri), credentials));
+        m_container = cloud_blob_container(std::move(container_name), cloud_blob_client(core::get_service_client_uri(m_uri), std::move(credentials)));
     }
 
     web::http::uri add_snapshot_to_uri(const web::http::uri& uri, const utility::string_t& snapshot_time)
@@ -81,7 +81,7 @@ namespace wa { namespace storage {
         }
 
         web::http::uri_builder builder(uri);
-        builder.append_query(protocol::uri_query_snapshot, snapshot_time);
+        builder.append_query(core::make_query_parameter(protocol::uri_query_snapshot, snapshot_time));
         return builder.to_uri();
     }
 
@@ -107,7 +107,7 @@ namespace wa { namespace storage {
     {
         if (!service_client().credentials().is_shared_key())
         {
-            throw std::logic_error(utility::conversions::to_utf8string(protocol::error_sas_missing_credentials));
+            throw std::logic_error(protocol::error_sas_missing_credentials);
         }
 
         utility::ostringstream_t resource_str;
@@ -124,7 +124,7 @@ namespace wa { namespace storage {
         auto instance = std::make_shared<cloud_blob>(*this);
         return instance->download_attributes_async(condition, modified_options, context).then([instance, condition, modified_options, context] () -> concurrency::streams::istream
         {
-            auto modified_condition = wa::storage::access_condition::generate_if_match_condition(instance->properties().etag());
+            auto modified_condition = azure::storage::access_condition::generate_if_match_condition(instance->properties().etag());
             modified_condition.set_lease_id(condition.lease_id());
             return core::cloud_blob_istreambuf(instance, modified_condition, modified_options, context).create_istream();
         });
@@ -143,9 +143,9 @@ namespace wa { namespace storage {
         command->set_build_request(std::bind(protocol::get_blob_properties, snapshot_time(), condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
         command->set_location_mode(core::command_location_mode::primary_or_secondary);
-        command->set_preprocess_response([properties, metadata, copy_state] (const web::http::http_response& response, operation_context context)
+        command->set_preprocess_response([properties, metadata, copy_state] (const web::http::http_response& response, const request_result& result, operation_context context)
         {
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             properties->update_all(protocol::blob_response_parsers::parse_blob_properties(response), false);
             *metadata = protocol::parse_metadata(response);
             *copy_state = protocol::blob_response_parsers::parse_copy_state(response);
@@ -164,9 +164,9 @@ namespace wa { namespace storage {
         auto command = std::make_shared<core::storage_command<void>>(uri());
         command->set_build_request(std::bind(protocol::set_blob_metadata, metadata(), condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response([properties] (const web::http::http_response& response, operation_context context)
+        command->set_preprocess_response([properties] (const web::http::http_response& response, const request_result& result, operation_context context)
         {
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
         });
         return core::executor<void>::execute_async(command, modified_options, context);
@@ -183,10 +183,13 @@ namespace wa { namespace storage {
         auto command = std::make_shared<core::storage_command<void>>(uri());
         command->set_build_request(std::bind(protocol::set_blob_properties, *properties, metadata(), condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response([properties] (const web::http::http_response& response, operation_context context)
+        command->set_preprocess_response([properties] (const web::http::http_response& response, const request_result& result, operation_context context)
         {
-            protocol::preprocess_response(response, context);
-            properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
+            protocol::preprocess_response_void(response, result, context);
+            
+            auto parsed_properties = protocol::blob_response_parsers::parse_blob_properties(response);
+            properties->update_etag_and_last_modified(parsed_properties);
+            properties->update_page_blob_sequence_number(parsed_properties);
         });
         return core::executor<void>::execute_async(command, modified_options, context);
     }
@@ -199,7 +202,7 @@ namespace wa { namespace storage {
         auto command = std::make_shared<core::storage_command<void>>(uri());
         command->set_build_request(std::bind(protocol::delete_blob, snapshots_option, snapshot_time(), condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response(std::bind(protocol::preprocess_response, std::placeholders::_1, std::placeholders::_2));
+        command->set_preprocess_response(std::bind(protocol::preprocess_response_void, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         return core::executor<void>::execute_async(command, modified_options, context);
     }
 
@@ -222,7 +225,7 @@ namespace wa { namespace storage {
                     }
                     catch (const storage_exception& e)
                     {
-                        auto result = e.result();
+                        const azure::storage::request_result& result = e.result();
                         if (result.is_response_available() &&
                             (result.http_status_code() == web::http::status_codes::NotFound) &&
                             (result.extended_error().code() == protocol::error_code_blob_not_found))
@@ -254,9 +257,9 @@ namespace wa { namespace storage {
         auto command = std::make_shared<core::storage_command<utility::string_t>>(uri());
         command->set_build_request(std::bind(protocol::lease_blob, protocol::header_value_lease_acquire, proposed_lease_id, duration, lease_break_period(), condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response([properties] (const web::http::http_response& response, operation_context context) -> utility::string_t
+        command->set_preprocess_response([properties] (const web::http::http_response& response, const request_result& result, operation_context context) -> utility::string_t
         {
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
             return protocol::parse_lease_id(response);
         });
@@ -279,9 +282,9 @@ namespace wa { namespace storage {
         auto command = std::make_shared<core::storage_command<void>>(uri());
         command->set_build_request(std::bind(protocol::lease_blob, protocol::header_value_lease_renew, utility::string_t(), lease_time(), lease_break_period(), condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response([properties] (const web::http::http_response& response, operation_context context)
+        command->set_preprocess_response([properties] (const web::http::http_response& response, const request_result& result, operation_context context)
         {
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
         });
         return core::executor<void>::execute_async(command, modified_options, context);
@@ -303,9 +306,9 @@ namespace wa { namespace storage {
         auto command = std::make_shared<core::storage_command<utility::string_t>>(uri());
         command->set_build_request(std::bind(protocol::lease_blob, protocol::header_value_lease_change, proposed_lease_id, lease_time(), lease_break_period(), condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response([properties] (const web::http::http_response& response, operation_context context) -> utility::string_t
+        command->set_preprocess_response([properties] (const web::http::http_response& response, const request_result& result, operation_context context) -> utility::string_t
         {
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
             return protocol::parse_lease_id(response);
         });
@@ -328,9 +331,9 @@ namespace wa { namespace storage {
         auto command = std::make_shared<core::storage_command<void>>(uri());
         command->set_build_request(std::bind(protocol::lease_blob, protocol::header_value_lease_release, utility::string_t(), lease_time(), lease_break_period(), condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response([properties] (const web::http::http_response& response, operation_context context)
+        command->set_preprocess_response([properties] (const web::http::http_response& response, const request_result& result, operation_context context)
         {
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
         });
         return core::executor<void>::execute_async(command, modified_options, context);
@@ -347,16 +350,27 @@ namespace wa { namespace storage {
         auto command = std::make_shared<core::storage_command<std::chrono::seconds>>(uri());
         command->set_build_request(std::bind(protocol::lease_blob, protocol::header_value_lease_break, utility::string_t(), lease_time(), break_period, condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response([properties] (const web::http::http_response& response, operation_context context) -> std::chrono::seconds
+        command->set_preprocess_response([properties] (const web::http::http_response& response, const request_result& result, operation_context context) -> std::chrono::seconds
         {
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
             return protocol::parse_lease_time(response);
         });
         return core::executor<std::chrono::seconds>::execute_async(command, modified_options, context);
     }
 
-    pplx::task<void> cloud_blob::download_range_to_stream_async(concurrency::streams::ostream target, int64_t offset, int64_t length, const access_condition& condition, const blob_request_options& options, operation_context context)
+    struct blob_download_info
+    {
+        bool m_are_properties_populated;
+        utility::size64_t m_total_written_to_destination_stream;
+        utility::size64_t m_response_length;
+        utility::string_t m_response_md5;
+        utility::string_t m_locked_etag;
+        bool m_reset_target;
+        concurrency::streams::ostream::pos_type m_target_offset;
+    };
+
+    pplx::task<void> cloud_blob::download_range_to_stream_async(concurrency::streams::ostream target, utility::size64_t offset, utility::size64_t length, const access_condition& condition, const blob_request_options& options, operation_context context)
     {
         blob_request_options modified_options(options);
         modified_options.apply_defaults(service_client().default_request_options(), blob_type::unspecified);
@@ -364,51 +378,150 @@ namespace wa { namespace storage {
         auto properties = m_properties;
         auto metadata = m_metadata;
         auto copy_state = m_copy_state;
-        auto target_offset = target.can_seek() ? target.tell() : 0;
-        auto response_md5 = std::make_shared<utility::string_t>();
-        auto response_length = std::make_shared<utility::size64_t>(protocol::invalid_size64_t);
+        const utility::string_t& current_snapshot_time = snapshot_time();
 
-        auto command = std::make_shared<core::storage_command<void>>(uri());
-        command->set_build_request(std::bind(protocol::get_blob, offset, length, modified_options.use_transactional_md5(), snapshot_time(), condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+        std::shared_ptr<blob_download_info> download_info = std::make_shared<blob_download_info>();
+        download_info->m_are_properties_populated = false;
+        download_info->m_total_written_to_destination_stream = 0;
+        download_info->m_response_length = std::numeric_limits<utility::size64_t>::max();
+        download_info->m_reset_target = false;
+        download_info->m_target_offset = target.can_seek() ? target.tell() : (Concurrency::streams::basic_ostream<unsigned char>::pos_type)0;
+
+        std::shared_ptr<core::storage_command<void>> command = std::make_shared<core::storage_command<void>>(uri());
+        std::weak_ptr<core::storage_command<void>> weak_command(command);
+        command->set_build_request([offset, length, modified_options, condition, current_snapshot_time, download_info](web::http::uri_builder uri_builder, const std::chrono::seconds& timeout, operation_context context) -> web::http::http_request
+        {
+            utility::size64_t current_offset = offset;
+            utility::size64_t current_length = length;
+            if (download_info->m_total_written_to_destination_stream > 0)
+            {
+                if (offset == std::numeric_limits<utility::size64_t>::max())
+                {
+                    current_offset = 0;
+                }
+
+                current_offset += download_info->m_total_written_to_destination_stream;
+
+                if (length > 0)
+                {
+                    current_length -= download_info->m_total_written_to_destination_stream;
+
+                    if (current_length <= 0)
+                    {
+                        // The entire blob has already been downloaded
+                        throw std::invalid_argument("offset");
+                    }
+                }
+            }
+
+            access_condition current_condition;
+            if (download_info->m_are_properties_populated && !download_info->m_locked_etag.empty())
+            {
+                current_condition.set_if_match_etag(download_info->m_locked_etag);
+
+                if (!condition.lease_id().empty())
+                {
+                    current_condition.set_lease_id(condition.lease_id());
+                }
+            }
+            else
+            {
+                current_condition = condition;
+            }
+
+            return protocol::get_blob(current_offset, current_length, modified_options.use_transactional_md5() && !download_info->m_are_properties_populated, current_snapshot_time, current_condition, uri_builder, timeout, context);
+        });
         command->set_authentication_handler(service_client().authentication_handler());
         command->set_location_mode(core::command_location_mode::primary_or_secondary);
         command->set_destination_stream(target);
         command->set_calculate_response_body_md5(!modified_options.disable_content_md5_validation());
-        command->set_recover_request([target, target_offset] (operation_context context) -> bool
+        command->set_recover_request([target, download_info](utility::size64_t total_written_to_destination_stream, operation_context context) -> bool
         {
-            // TODO support resume
-            if (target.can_seek())
+            if (download_info->m_reset_target)
             {
-                target.seek(target_offset);
-                return true;
+                download_info->m_total_written_to_destination_stream = 0;
+
+                if (total_written_to_destination_stream > 0)
+                {
+                    if (!target.can_seek())
+                    {
+                        return false;
+                    }
+
+                    target.seek(download_info->m_target_offset);
+                }
+
+                download_info->m_reset_target = false;
             }
             else
             {
-                return false;
-            }
-        });
-        command->set_preprocess_response([modified_options, properties, metadata, copy_state, offset, response_md5, response_length] (const web::http::http_response& response, operation_context context)
-        {
-            protocol::preprocess_response(response, context);
-            properties->update_all(protocol::blob_response_parsers::parse_blob_properties(response), offset >= 0);
-            *metadata = protocol::parse_metadata(response);
-            *copy_state = protocol::blob_response_parsers::parse_copy_state(response);
-            
-            *response_md5 = protocol::get_header_value(response, web::http::header_names::content_md5);
-            
-            if (modified_options.use_transactional_md5() && !modified_options.disable_content_md5_validation() && response_md5->empty())
-            {
-                throw storage_exception(utility::conversions::to_utf8string(protocol::error_missing_md5));
+                download_info->m_total_written_to_destination_stream = total_written_to_destination_stream;
             }
 
-            *response_length = response.headers().content_length();
+            return true;
         });
-        command->set_postprocess_response([response_md5, response_length] (const web::http::http_response& response, const request_result&, const core::ostream_descriptor& descriptor, operation_context context) -> pplx::task<void>
+        command->set_preprocess_response([weak_command, offset, modified_options, properties, metadata, copy_state, download_info](const web::http::http_response& response, const request_result& result, operation_context context)
         {
-            protocol::check_stream_length_and_md5(*response_length, *response_md5, descriptor);
+            std::shared_ptr<core::storage_command<void>> command(weak_command);
+
+            protocol::preprocess_response_void(response, result, context);
+
+            if (!download_info->m_are_properties_populated)
+            {
+                properties->update_all(protocol::blob_response_parsers::parse_blob_properties(response), offset != std::numeric_limits<utility::size64_t>::max());
+                *metadata = protocol::parse_metadata(response);
+                *copy_state = protocol::blob_response_parsers::parse_copy_state(response);
+
+                download_info->m_response_length = result.content_length();
+                download_info->m_response_md5 = result.content_md5();
+
+                if (modified_options.use_transactional_md5() && !modified_options.disable_content_md5_validation() && download_info->m_response_md5.empty())
+                {
+                    throw storage_exception(protocol::error_missing_md5);
+                }
+
+                // Lock to the current storage location when resuming a failed download. This is locked 
+                // early before the retry policy has the opportunity to change the storage location.
+                command->set_location_mode(core::command_location_mode::primary_or_secondary, result.target_location());
+
+                download_info->m_locked_etag = properties->etag();
+                download_info->m_are_properties_populated = true;
+            }
+        });
+        command->set_postprocess_response([weak_command, download_info](const web::http::http_response&, const request_result&, const core::ostream_descriptor& descriptor, operation_context context) -> pplx::task<void>
+        {
+            std::shared_ptr<core::storage_command<void>> command(weak_command);
+
+            // Start the download over from the beginning if a retry is needed again because the last
+            // response was successfully downloaded and the MD5 hash has already been calculated
+            download_info->m_reset_target = true;
+            download_info->m_are_properties_populated = false;
+
+            command->set_location_mode(core::command_location_mode::primary_or_secondary);
+
+            if (!download_info->m_response_md5.empty() && !descriptor.content_md5().empty() && download_info->m_response_md5 != descriptor.content_md5())
+            {
+                throw storage_exception(protocol::error_md5_mismatch);
+            }
+
             return pplx::task_from_result();
         });
         return core::executor<void>::execute_async(command, modified_options, context);
+    }
+
+    pplx::task<void> cloud_blob::download_to_file_async(const utility::string_t &path, const access_condition& condition, const blob_request_options& options, operation_context context)
+    {
+        auto instance = std::make_shared<cloud_blob>(*this);
+        return concurrency::streams::file_stream<uint8_t>::open_ostream(path).then([instance, condition, options, context] (concurrency::streams::ostream stream) -> pplx::task<void>
+        {
+            return instance->download_to_stream_async(stream, condition, options, context).then([stream] (pplx::task<void> download_task) -> pplx::task<void>
+            {
+                return stream.close().then([download_task] ()
+                {
+                    download_task.wait();
+                });
+            });
+        });
     }
 
     pplx::task<bool> cloud_blob::exists_async(bool primary_only, const blob_request_options& options, operation_context context)
@@ -424,14 +537,14 @@ namespace wa { namespace storage {
         command->set_build_request(std::bind(protocol::get_blob_properties, snapshot_time(), access_condition(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
         command->set_location_mode(primary_only ? core::command_location_mode::primary_only : core::command_location_mode::primary_or_secondary);
-        command->set_preprocess_response([properties, metadata, copy_state] (const web::http::http_response& response, operation_context context) -> bool
+        command->set_preprocess_response([properties, metadata, copy_state] (const web::http::http_response& response, const request_result& result, operation_context context) -> bool
         {
             if (response.status_code() == web::http::status_codes::NotFound)
             {
                 return false;
             }
 
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             properties->update_all(protocol::blob_response_parsers::parse_blob_properties(response), false);
             *metadata = protocol::parse_metadata(response);
             *copy_state = protocol::blob_response_parsers::parse_copy_state(response);
@@ -452,9 +565,9 @@ namespace wa { namespace storage {
         auto command = std::make_shared<core::storage_command<utility::string_t>>(uri());
         command->set_build_request(std::bind(protocol::copy_blob, source, source_condition, metadata(), destination_condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response([properties, copy_state] (const web::http::http_response& response, operation_context context) -> utility::string_t
+        command->set_preprocess_response([properties, copy_state] (const web::http::http_response& response, const request_result& result, operation_context context) -> utility::string_t
         {
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
             auto new_state = protocol::blob_response_parsers::parse_copy_state(response);
             *copy_state = new_state;
@@ -465,8 +578,8 @@ namespace wa { namespace storage {
 
     pplx::task<utility::string_t> cloud_blob::start_copy_from_blob_async(const cloud_blob& source, const access_condition& source_condition, const access_condition& destination_condition, const blob_request_options& options, operation_context context)
     {
-        auto source_uri = source.snapshot_qualified_uri().primary_uri();
-        source_uri = service_client().credentials().transform_uri(source_uri);
+        const web::http::uri& raw_source_uri = source.snapshot_qualified_uri().primary_uri();
+        web::http::uri source_uri = service_client().credentials().transform_uri(raw_source_uri);
 
         return start_copy_from_blob_async(source_uri, source_condition, destination_condition, options, context);
     }
@@ -480,11 +593,11 @@ namespace wa { namespace storage {
         auto command = std::make_shared<core::storage_command<void>>(uri());
         command->set_build_request(std::bind(protocol::abort_copy_blob, copy_id, condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response(std::bind(protocol::preprocess_response, std::placeholders::_1, std::placeholders::_2));
+        command->set_preprocess_response(std::bind(protocol::preprocess_response_void, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         return core::executor<void>::execute_async(command, modified_options, context);
     }
 
-    pplx::task<cloud_blob> cloud_blob::create_snapshot_async(const cloud_metadata& metadata, const access_condition& condition, const blob_request_options& options, operation_context context)
+    pplx::task<cloud_blob> cloud_blob::create_snapshot_async(cloud_metadata metadata, const access_condition& condition, const blob_request_options& options, operation_context context)
     {
         assert_no_snapshot();
         blob_request_options modified_options(options);
@@ -493,15 +606,18 @@ namespace wa { namespace storage {
         auto properties = m_properties;
         auto snapshot_name = name();
         auto snapshot_container = container();
+        auto snapshot_metadata = std::make_shared<cloud_metadata>(std::move(metadata));
+        auto resulting_metadata = snapshot_metadata->empty() ? m_metadata : snapshot_metadata;
 
         auto command = std::make_shared<core::storage_command<cloud_blob>>(uri());
-        command->set_build_request(std::bind(protocol::snapshot_blob, metadata, condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+        command->set_build_request(std::bind(protocol::snapshot_blob, *snapshot_metadata, condition, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         command->set_authentication_handler(service_client().authentication_handler());
-        command->set_preprocess_response([snapshot_name, snapshot_container, properties] (const web::http::http_response& response, operation_context context) -> cloud_blob
+        command->set_preprocess_response([snapshot_name, snapshot_container, resulting_metadata, properties] (const web::http::http_response& response, const request_result& result, operation_context context) -> cloud_blob
         {
-            protocol::preprocess_response(response, context);
+            protocol::preprocess_response_void(response, result, context);
             auto snapshot_time = protocol::get_header_value(response, protocol::ms_header_snapshot);
             cloud_blob snapshot(snapshot_name, snapshot_time, snapshot_container);
+            *snapshot.m_metadata = *resulting_metadata;
             snapshot.m_properties->copy_from_root(*properties);
             snapshot.m_properties->update_etag_and_last_modified(protocol::blob_response_parsers::parse_blob_properties(response));
             return snapshot;
@@ -513,8 +629,8 @@ namespace wa { namespace storage {
     {
         if (!m_snapshot_time.empty())
         {
-            throw std::logic_error(utility::conversions::to_utf8string(protocol::error_cannot_modify_snapshot));
+            throw std::logic_error(protocol::error_cannot_modify_snapshot);
         }
     }
 
-}} // namespace wa::storage
+}} // namespace azure::storage

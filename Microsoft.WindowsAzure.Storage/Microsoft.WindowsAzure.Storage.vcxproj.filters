@@ -33,9 +33,6 @@
     <ClInclude Include="includes\wascore\executor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="includes\wascore\hash_windows.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="includes\wascore\logging.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -69,9 +66,6 @@
     <ClInclude Include="includes\targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClCompile Include="src\queue_request_factory.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClInclude Include="includes\was\auth.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -97,6 +91,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\wascore\protocol_json.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\wascore\hashing.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -161,9 +161,6 @@
     <ClCompile Include="src\cloud_table_client.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\hash_windows.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\navigation.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -194,9 +191,6 @@
     <ClCompile Include="src\table_query.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\util_windows.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\xmlhelpers.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -212,9 +206,6 @@
     <ClCompile Include="src\basic_types.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\logging_windows.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\operation_context.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -224,13 +215,28 @@
     <ClCompile Include="src\mime_multipart_helper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
+    <ClCompile Include="src\protocol_json.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cloud_common.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\queue_request_factory.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\logging.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\hashing.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="version.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

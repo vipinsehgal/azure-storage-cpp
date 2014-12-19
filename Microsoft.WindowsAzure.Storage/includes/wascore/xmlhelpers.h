@@ -54,8 +54,9 @@
 
 #include <string>
 #include "cpprest/basic_types.h"
+#include "was/core.h"
 
-namespace wa { namespace storage { namespace core { namespace xml {
+namespace azure { namespace storage { namespace core { namespace xml {
 
 /// <summary>
 /// XML reader based on xmlllite
@@ -230,12 +231,9 @@ protected:
     /// Write an element including the name and text.
     /// </summary>
     template<class T>
-    void write_element(const utility::string_t& elementName, const T& value)
+    void write_element(const utility::string_t& elementName, T value)
     {
-        // TODO: Can this be called with a double value? If so, probably need do "oss.precision(std::numeric_limits<double>::digits10 + 2);"
-        utility::ostringstream_t oss;
-        oss << value;
-        write_element(elementName, oss.str());
+        write_element(elementName, convert_to_string(value));
     }
 
     /// <summary>
@@ -283,6 +281,6 @@ private:
 #endif
 };
 
-}}}} // namespace wa::storage::core::xml
+}}}} // namespace azure::storage::core::xml
 
 #endif

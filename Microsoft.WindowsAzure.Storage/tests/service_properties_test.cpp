@@ -23,9 +23,9 @@
 #include "was/queue.h"
 #include "was/table.h"
 
-void add_metrics_1(wa::storage::service_properties::metrics_properties& metrics)
+void add_metrics_1(azure::storage::service_properties::metrics_properties& metrics)
 {
-    metrics = wa::storage::service_properties::metrics_properties();
+    metrics = azure::storage::service_properties::metrics_properties();
     metrics.set_version(U("1.0"));
     metrics.set_enabled(true);
     metrics.set_include_apis(false);
@@ -33,36 +33,53 @@ void add_metrics_1(wa::storage::service_properties::metrics_properties& metrics)
     metrics.set_retention_days(5);
 }
 
-void add_metrics_2(wa::storage::service_properties::metrics_properties& metrics)
+void add_metrics_2(azure::storage::service_properties::metrics_properties& metrics)
 {
-    metrics = wa::storage::service_properties::metrics_properties();
+    metrics = azure::storage::service_properties::metrics_properties();
     metrics.set_version(U("1.0"));
     metrics.set_enabled(true);
     metrics.set_include_apis(true);
     metrics.set_retention_policy_enabled(false);
 }
 
-void add_logging_1(wa::storage::service_properties::logging_properties& logging)
+void add_metrics_3(azure::storage::service_properties::metrics_properties& metrics)
 {
-    logging = wa::storage::service_properties::logging_properties();
+    metrics = azure::storage::service_properties::metrics_properties();
+    metrics.set_version(U("1.0"));
+    metrics.set_enabled(false);
+    metrics.set_include_apis(true);
+    metrics.set_retention_policy_enabled(false);
+}
+
+void add_metrics_4(azure::storage::service_properties::metrics_properties& metrics)
+{
+    metrics = azure::storage::service_properties::metrics_properties();
+    metrics.set_version(U("1.0"));
+    metrics.set_enabled(false);
+    metrics.set_retention_policy_enabled(false);
+}
+
+void add_logging_1(azure::storage::service_properties::logging_properties& logging)
+{
+    logging = azure::storage::service_properties::logging_properties();
     logging.set_version(U("1.0"));
     logging.set_read_enabled(true);
     logging.set_retention_policy_enabled(true);
     logging.set_retention_days(20);
 }
 
-void add_logging_2(wa::storage::service_properties::logging_properties& logging)
+void add_logging_2(azure::storage::service_properties::logging_properties& logging)
 {
-    logging = wa::storage::service_properties::logging_properties();
+    logging = azure::storage::service_properties::logging_properties();
     logging.set_version(U("1.0"));
     logging.set_write_enabled(true);
     logging.set_delete_enabled(true);
     logging.set_retention_policy_enabled(false);
 }
 
-void add_cors_rule_1(std::vector<wa::storage::service_properties::cors_rule>& cors_rules)
+void add_cors_rule_1(std::vector<azure::storage::service_properties::cors_rule>& cors_rules)
 {
-    wa::storage::service_properties::cors_rule rule;
+    azure::storage::service_properties::cors_rule rule;
     rule.allowed_headers().push_back(U("x-ms-meta-data*"));
     rule.allowed_headers().push_back(U("x-ms-meta-target*"));
     rule.allowed_origins().push_back(U("www.ab.com"));
@@ -75,9 +92,9 @@ void add_cors_rule_1(std::vector<wa::storage::service_properties::cors_rule>& co
     cors_rules.push_back(rule);
 }
 
-void add_cors_rule_2(std::vector<wa::storage::service_properties::cors_rule>& cors_rules)
+void add_cors_rule_2(std::vector<azure::storage::service_properties::cors_rule>& cors_rules)
 {
-    wa::storage::service_properties::cors_rule rule;
+    azure::storage::service_properties::cors_rule rule;
     rule.allowed_headers().push_back(U("x-ms-meta-ab*"));
     rule.allowed_origins().push_back(U("*"));
     rule.allowed_methods().push_back(web::http::methods::HEAD);
@@ -86,7 +103,7 @@ void add_cors_rule_2(std::vector<wa::storage::service_properties::cors_rule>& co
     cors_rules.push_back(rule);
 }
 
-void check_service_properties(const wa::storage::service_properties& a, const wa::storage::service_properties& b)
+void check_service_properties(const azure::storage::service_properties& a, const azure::storage::service_properties& b)
 {
     CHECK_UTF8_EQUAL(a.logging().version(), b.logging().version());
     CHECK_EQUAL(a.logging().delete_enabled(), b.logging().delete_enabled());
@@ -97,13 +114,19 @@ void check_service_properties(const wa::storage::service_properties& a, const wa
 
     CHECK_UTF8_EQUAL(a.hour_metrics().version(), b.hour_metrics().version());
     CHECK_EQUAL(a.hour_metrics().enabled(), b.hour_metrics().enabled());
-    CHECK_EQUAL(a.hour_metrics().include_apis(), b.hour_metrics().include_apis());
+    if (a.hour_metrics().enabled())
+    {
+        CHECK_EQUAL(a.hour_metrics().include_apis(), b.hour_metrics().include_apis());
+    }
     CHECK_EQUAL(a.hour_metrics().retention_policy_enabled(), b.hour_metrics().retention_policy_enabled());
     CHECK_EQUAL(a.hour_metrics().retention_days(), b.hour_metrics().retention_days());
 
     CHECK_UTF8_EQUAL(a.minute_metrics().version(), b.minute_metrics().version());
     CHECK_EQUAL(a.minute_metrics().enabled(), b.minute_metrics().enabled());
-    CHECK_EQUAL(a.minute_metrics().include_apis(), b.minute_metrics().include_apis());
+    if (a.minute_metrics().enabled())
+    {
+        CHECK_EQUAL(a.minute_metrics().include_apis(), b.minute_metrics().include_apis());
+    }
     CHECK_EQUAL(a.minute_metrics().retention_policy_enabled(), b.minute_metrics().retention_policy_enabled());
     CHECK_EQUAL(a.minute_metrics().retention_days(), b.minute_metrics().retention_days());
 
@@ -121,30 +144,31 @@ void check_service_properties(const wa::storage::service_properties& a, const wa
     CHECK(a_iter == a.cors().cend());
     CHECK(b_iter == b.cors().cend());
 
-    CHECK_UTF8_EQUAL(a.default_service_version(), b.default_service_version());
+    // TODO: Is the following check valid?
+    //CHECK_UTF8_EQUAL(a.default_service_version(), b.default_service_version());
 }
 
 template<typename Client, typename Options>
-void test_service_properties(const Client& client, const Options& options, wa::storage::operation_context context, bool default_version_supported)
+void test_service_properties(const Client& client, const Options& options, azure::storage::operation_context context, bool default_version_supported)
 {
-    wa::storage::service_properties props;
+    azure::storage::service_properties props;
     add_logging_1(props.logging());
     add_metrics_1(props.hour_metrics());
     add_metrics_2(props.minute_metrics());
     add_cors_rule_1(props.cors());
     add_cors_rule_2(props.cors());
 
-    wa::storage::service_properties temp_props;
+    azure::storage::service_properties temp_props;
     add_logging_2(temp_props.logging());
     add_metrics_2(temp_props.hour_metrics());
     add_metrics_1(temp_props.minute_metrics());
     add_cors_rule_2(temp_props.cors());
 
-    client.upload_service_properties(props, wa::storage::service_properties_includes::all(), options, context);
+    client.upload_service_properties(props, azure::storage::service_properties_includes::all(), options, context);
     check_service_properties(props, client.download_service_properties(options, context));
 
     {
-        wa::storage::service_properties_includes includes;
+        azure::storage::service_properties_includes includes;
         includes.set_logging(true);
         client.upload_service_properties(temp_props, includes, options, context);
         add_logging_2(props.logging());
@@ -153,7 +177,7 @@ void test_service_properties(const Client& client, const Options& options, wa::s
     }
 
     {
-        wa::storage::service_properties_includes includes;
+        azure::storage::service_properties_includes includes;
         includes.set_hour_metrics(true);
         client.upload_service_properties(temp_props, includes, options, context);
         add_metrics_2(props.hour_metrics());
@@ -162,7 +186,7 @@ void test_service_properties(const Client& client, const Options& options, wa::s
     }
 
     {
-        wa::storage::service_properties_includes includes;
+        azure::storage::service_properties_includes includes;
         includes.set_minute_metrics(true);
         client.upload_service_properties(temp_props, includes, options, context);
         add_metrics_1(props.minute_metrics());
@@ -171,7 +195,7 @@ void test_service_properties(const Client& client, const Options& options, wa::s
     }
 
     {
-        wa::storage::service_properties_includes includes;
+        azure::storage::service_properties_includes includes;
         includes.set_cors(true);
         client.upload_service_properties(temp_props, includes, options, context);
         props.cors().erase(props.cors().begin());
@@ -180,7 +204,7 @@ void test_service_properties(const Client& client, const Options& options, wa::s
     }
 
     {
-        wa::storage::service_properties_includes includes;
+        azure::storage::service_properties_includes includes;
         includes.set_hour_metrics(true);
         includes.set_minute_metrics(true);
         includes.set_cors(true);
@@ -191,15 +215,29 @@ void test_service_properties(const Client& client, const Options& options, wa::s
         check_service_properties(props, client.download_service_properties(options, context));
     }
 
+    {
+        azure::storage::service_properties_includes includes;
+        includes.set_hour_metrics(true);
+        includes.set_minute_metrics(true);
+        includes.set_cors(true);
+        add_metrics_3(temp_props.hour_metrics());
+        add_metrics_4(temp_props.minute_metrics());
+        client.upload_service_properties(temp_props, includes, options, context);
+        add_metrics_3(props.hour_metrics());
+        add_metrics_4(props.minute_metrics());
+        props.cors().clear();
+        check_service_properties(props, client.download_service_properties(options, context));
+    }
+
     props.set_default_service_version(U("2013-08-15"));
     if (default_version_supported)
     {
-        client.upload_service_properties(props, wa::storage::service_properties_includes::all(), options, context);
+        client.upload_service_properties(props, azure::storage::service_properties_includes::all(), options, context);
         check_service_properties(props, client.download_service_properties(options, context));
     }
     else
     {
-        CHECK_THROW(client.upload_service_properties(props, wa::storage::service_properties_includes::all(), options, context), wa::storage::storage_exception);
+        CHECK_THROW(client.upload_service_properties(props, azure::storage::service_properties_includes::all(), options, context), azure::storage::storage_exception);
     }
 }
 
@@ -208,18 +246,48 @@ SUITE(Client)
     TEST_FIXTURE(test_base, blob_service_properties)
     {
         auto client = test_config::instance().account().create_cloud_blob_client();
-        test_service_properties(client, wa::storage::blob_request_options(), m_context, true);
+        test_service_properties(client, azure::storage::blob_request_options(), m_context, true);
     }
 
     TEST_FIXTURE(test_base, queue_service_properties)
     {
         auto client = test_config::instance().account().create_cloud_queue_client();
-        test_service_properties(client, wa::storage::queue_request_options(), m_context, false);
+        test_service_properties(client, azure::storage::queue_request_options(), m_context, false);
     }
 
     TEST_FIXTURE(test_base, table_service_properties)
     {
         auto client = test_config::instance().account().create_cloud_table_client();
-        test_service_properties(client, wa::storage::table_request_options(), m_context, false);
+        test_service_properties(client, azure::storage::table_request_options(), m_context, false);
+    }
+
+    TEST_FIXTURE(test_base, blob_service_stats)
+    {
+        auto client = test_config::instance().account().create_cloud_blob_client();
+        azure::storage::blob_request_options options;
+        options.set_location_mode(azure::storage::location_mode::secondary_only);
+        auto stats = client.download_service_stats(options, m_context);
+        CHECK(azure::storage::geo_replication_status::unavailable != stats.geo_replication().status());
+        CHECK(stats.geo_replication().last_sync_time().is_initialized());
+    }
+
+    TEST_FIXTURE(test_base, queue_service_stats)
+    {
+        auto client = test_config::instance().account().create_cloud_queue_client();
+        azure::storage::queue_request_options options;
+        options.set_location_mode(azure::storage::location_mode::secondary_only);
+        auto stats = client.download_service_stats(options, m_context);
+        CHECK(azure::storage::geo_replication_status::unavailable != stats.geo_replication().status());
+        CHECK(stats.geo_replication().last_sync_time().is_initialized());
+    }
+
+    TEST_FIXTURE(test_base, table_service_stats)
+    {
+        auto client = test_config::instance().account().create_cloud_table_client();
+        azure::storage::table_request_options options;
+        options.set_location_mode(azure::storage::location_mode::secondary_only);
+        auto stats = client.download_service_stats(options, m_context);
+        CHECK(azure::storage::geo_replication_status::unavailable != stats.geo_replication().status());
+        CHECK(stats.geo_replication().last_sync_time().is_initialized());
     }
 }

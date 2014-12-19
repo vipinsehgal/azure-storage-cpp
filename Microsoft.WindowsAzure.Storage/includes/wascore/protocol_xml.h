@@ -22,24 +22,24 @@
 #include "was/queue.h"
 #include "wascore/xmlhelpers.h"
 
-namespace wa { namespace storage { namespace protocol {
+namespace azure { namespace storage { namespace protocol {
 
     class storage_error_reader : public core::xml::xml_reader
     {
     public:
 
-        storage_error_reader(concurrency::streams::istream error_response)
+        explicit storage_error_reader(concurrency::streams::istream error_response)
             : xml_reader(error_response)
         {
         }
 
-        utility::string_t extract_error_code()
+        utility::string_t move_error_code()
         {
             parse();
             return std::move(m_error_code);
         }
 
-        utility::string_t extract_error_message()
+        utility::string_t move_error_message()
         {
             parse();
             return std::move(m_error_message);
@@ -62,22 +62,22 @@ namespace wa { namespace storage { namespace protocol {
         {
         }
 
-        web::http::uri uri()
+        web::http::uri move_uri()
         {
             return std::move(m_uri);
         }
 
-        utility::string_t name()
+        utility::string_t move_name()
         {
             return std::move(m_name);
         }
 
-        cloud_metadata metadata()
+        cloud_metadata move_metadata()
         {
             return std::move(m_metadata);
         }
 
-        cloud_blob_container_properties properties()
+        cloud_blob_container_properties move_properties()
         {
             return std::move(m_properties);
         }
@@ -94,18 +94,18 @@ namespace wa { namespace storage { namespace protocol {
     {
     public:
 
-        list_containers_reader(concurrency::streams::istream stream)
+        explicit list_containers_reader(concurrency::streams::istream stream)
             : xml_reader(stream)
         {
         }
 
-        std::vector<cloud_blob_container_list_item> extract_items()
+        std::vector<cloud_blob_container_list_item> move_items()
         {
             parse();
             return std::move(m_items);
         }
 
-        utility::string_t extract_next_marker()
+        utility::string_t move_next_marker()
         {
             parse();
             return std::move(m_next_marker);
@@ -136,32 +136,32 @@ namespace wa { namespace storage { namespace protocol {
         {
         }
 
-        web::http::uri uri()
+        web::http::uri move_uri()
         {
             return std::move(m_uri);
         }
 
-        utility::string_t name()
+        utility::string_t move_name()
         {
             return std::move(m_name);
         }
 
-        utility::string_t snapshot_time()
+        utility::string_t move_snapshot_time()
         {
             return std::move(m_snapshot_time);
         }
 
-        cloud_metadata metadata()
+        cloud_metadata move_metadata()
         {
             return std::move(m_metadata);
         }
 
-        cloud_blob_properties properties()
+        cloud_blob_properties move_properties()
         {
             return std::move(m_properties);
         }
 
-        copy_state copy_state()
+        copy_state move_copy_state()
         {
             return std::move(m_copy_state);
         }
@@ -173,7 +173,7 @@ namespace wa { namespace storage { namespace protocol {
         utility::string_t m_snapshot_time;
         cloud_metadata m_metadata;
         cloud_blob_properties m_properties;
-        wa::storage::copy_state m_copy_state;
+        azure::storage::copy_state m_copy_state;
     };
 
     class cloud_blob_prefix_list_item
@@ -185,12 +185,12 @@ namespace wa { namespace storage { namespace protocol {
         {
         }
 
-        web::http::uri uri()
+        web::http::uri move_uri()
         {
             return std::move(m_uri);
         }
 
-        utility::string_t name()
+        utility::string_t move_name()
         {
             return std::move(m_name);
         }
@@ -205,24 +205,24 @@ namespace wa { namespace storage { namespace protocol {
     {
     public:
 
-        list_blobs_reader(concurrency::streams::istream stream)
+        explicit list_blobs_reader(concurrency::streams::istream stream)
             : xml_reader(stream)
         {
         }
 
-        std::vector<cloud_blob_list_item> extract_blob_items()
+        std::vector<cloud_blob_list_item> move_blob_items()
         {
             parse();
             return std::move(m_blob_items);
         }
 
-        std::vector<cloud_blob_prefix_list_item> extract_blob_prefix_items()
+        std::vector<cloud_blob_prefix_list_item> move_blob_prefix_items()
         {
             parse();
             return std::move(m_blob_prefix_items);
         }
 
-        utility::string_t extract_next_marker()
+        utility::string_t move_next_marker()
         {
             parse();
             return std::move(m_next_marker);
@@ -251,13 +251,13 @@ namespace wa { namespace storage { namespace protocol {
     {
     public:
 
-        page_list_reader(concurrency::streams::istream stream)
+        explicit page_list_reader(concurrency::streams::istream stream)
             : xml_reader(stream), m_start(-1), m_end(-1)
         {
         }
 
         // Extracts the result. This method can only be called once on this reader
-        std::vector<page_range> extract_result()
+        std::vector<page_range> move_result()
         {
             parse();
             return std::move(m_page_list);
@@ -277,13 +277,13 @@ namespace wa { namespace storage { namespace protocol {
     {
     public:
 
-        block_list_reader(concurrency::streams::istream stream)
-            : xml_reader(stream), m_handling_what(0), m_size(-1)
+        explicit block_list_reader(concurrency::streams::istream stream)
+            : xml_reader(stream), m_handling_what(0), m_size(std::numeric_limits<size_t>::max())
         {
         }
 
         // Extracts the result. This method can only be called once on this reader
-        std::vector<block_list_item> extract_result()
+        std::vector<block_list_item> move_result()
         {
             parse();
             return std::move(m_block_list);
@@ -320,12 +320,12 @@ namespace wa { namespace storage { namespace protocol {
     {
     public:
 
-        access_policy_reader(concurrency::streams::istream stream)
+        explicit access_policy_reader(concurrency::streams::istream stream)
             : xml_reader(stream)
         {
         }
 
-        shared_access_policies<Policy> extract_policies()
+        shared_access_policies<Policy> move_policies()
         {
             parse();
             return std::move(m_policies);
@@ -396,12 +396,12 @@ namespace wa { namespace storage { namespace protocol {
 
                 if (policy.start().is_initialized())
                 {
-                    write_element(xml_access_policy_start, policy.start().to_string(utility::datetime::ISO_8601));
+                    write_element(xml_access_policy_start, core::convert_to_string_with_fixed_length_fractional_seconds(policy.start()));
                 }
 
                 if (policy.expiry().is_initialized())
                 {
-                    write_element(xml_access_policy_expiry, policy.expiry().to_string(utility::datetime::ISO_8601));
+                    write_element(xml_access_policy_expiry, core::convert_to_string_with_fixed_length_fractional_seconds(policy.expiry()));
                 }
 
                 if (policy.permission() != 0)
@@ -427,26 +427,12 @@ namespace wa { namespace storage { namespace protocol {
         {
         }
 
-        /*
-        cloud_queue_list_item(utility::string_t name, web::http::uri uri, cloud_metadata metadata)
-            : m_name(std::move(name)), m_uri(std::move(uri)), m_metadata(std::move(metadata))
-        {
-        }
-        */
-
-        utility::string_t name() const
+        utility::string_t move_name()
         {
             return std::move(m_name);
         }
 
-        /*
-        web::http::uri uri() const
-        {
-            return std::move(m_uri);
-        }
-        */
-
-        cloud_metadata metadata() const
+        cloud_metadata move_metadata()
         {
             return std::move(m_metadata);
         }
@@ -454,7 +440,6 @@ namespace wa { namespace storage { namespace protocol {
     private:
 
         utility::string_t m_name;
-        //web::http::uri m_uri;
         cloud_metadata m_metadata;
     };
 
@@ -462,18 +447,18 @@ namespace wa { namespace storage { namespace protocol {
     {
     public:
 
-        list_queues_reader(Concurrency::streams::istream stream)
+        explicit list_queues_reader(concurrency::streams::istream stream)
             : xml_reader(stream)
         {
         }
 
-        std::vector<cloud_queue_list_item> extract_items()
+        std::vector<cloud_queue_list_item> move_items()
         {
             parse();
             return std::move(m_items);
         }
 
-        utility::string_t extract_next_marker()
+        utility::string_t move_next_marker()
         {
             parse();
             return std::move(m_next_marker);
@@ -481,7 +466,6 @@ namespace wa { namespace storage { namespace protocol {
 
     protected:
 
-        virtual void handle_begin_element(const utility::string_t& element_name);
         virtual void handle_element(const utility::string_t& element_name);
         virtual void handle_end_element(const utility::string_t& element_name);
 
@@ -489,7 +473,6 @@ namespace wa { namespace storage { namespace protocol {
         utility::string_t m_next_marker;
 
         utility::string_t m_name;
-        //web::http::uri m_uri;
         cloud_metadata m_metadata;
     };
 
@@ -498,43 +481,43 @@ namespace wa { namespace storage { namespace protocol {
     public:
 
         cloud_message_list_item(utility::string_t content, utility::string_t id, utility::string_t pop_receipt, utility::datetime insertion_time, utility::datetime expiration_time, utility::datetime next_visible_time, int dequeue_count)
-            : m_content(std::move(content)), m_id(std::move(id)), m_pop_receipt(std::move(pop_receipt)), m_insertion_time(std::move(insertion_time)), m_expiration_time(std::move(expiration_time)), m_next_visible_time(std::move(next_visible_time)), m_dequeue_count(dequeue_count)
+            : m_content(std::move(content)), m_id(std::move(id)), m_pop_receipt(std::move(pop_receipt)), m_insertion_time(insertion_time), m_expiration_time(expiration_time), m_next_visible_time(next_visible_time), m_dequeue_count(dequeue_count)
         {
         }
 
-        utility::string_t content() const
+        utility::string_t move_content()
         {
             return std::move(m_content);
         }
 
-        utility::string_t id() const
+        utility::string_t move_id()
         {
             return std::move(m_id);
         }
 
-        utility::string_t pop_receipt() const
+        utility::string_t move_pop_receipt()
         {
             return std::move(m_pop_receipt);
         }
 
         utility::datetime insertion_time() const
         {
-            return std::move(m_insertion_time);
+            return m_insertion_time;
         }
 
         utility::datetime expiration_time() const
         {
-            return std::move(m_expiration_time);
+            return m_expiration_time;
         }
 
         utility::datetime next_visible_time() const
         {
-            return std::move(m_next_visible_time);
+            return m_next_visible_time;
         }
 
         int dequeue_count() const
         {
-            return std::move(m_dequeue_count);
+            return m_dequeue_count;
         }
 
     private:
@@ -552,12 +535,12 @@ namespace wa { namespace storage { namespace protocol {
     {
     public:
 
-        message_reader(Concurrency::streams::istream stream)
-            : xml_reader(stream)
+        explicit message_reader(concurrency::streams::istream stream)
+            : xml_reader(stream), m_dequeue_count(0)
         {
         }
 
-        std::vector<cloud_message_list_item> extract_items()
+        std::vector<cloud_message_list_item> move_items()
         {
             parse();
             return std::move(m_items);
@@ -565,7 +548,6 @@ namespace wa { namespace storage { namespace protocol {
 
     protected:
 
-        virtual void handle_begin_element(const utility::string_t& element_name);
         virtual void handle_element(const utility::string_t& element_name);
         virtual void handle_end_element(const utility::string_t& element_name);
 
@@ -595,12 +577,12 @@ namespace wa { namespace storage { namespace protocol {
     {
     public:
 
-        service_properties_reader(concurrency::streams::istream stream)
-            : xml_reader(stream), m_current_retention_policy_days(0)
+        explicit service_properties_reader(concurrency::streams::istream stream)
+            : xml_reader(stream), m_current_retention_policy_days(0), m_current_retention_policy_enabled(false)
         {
         }
 
-        service_properties extract_properties()
+        service_properties move_properties()
         {
             parse();
             return std::move(m_service_properties);
@@ -635,10 +617,36 @@ namespace wa { namespace storage { namespace protocol {
 
     private:
 
-        void write_logging(const service_properties::logging_properties& logging, std::ostringstream& output);
-        void write_metrics(const service_properties::metrics_properties& metrics, std::ostringstream& output);
-        void write_cors_rule(const service_properties::cors_rule& rule, std::ostringstream& output);
-        void write_retention_policy(bool enabled, int days, std::ostringstream& output);
+        void write_logging(const service_properties::logging_properties& logging);
+        void write_metrics(const service_properties::metrics_properties& metrics);
+        void write_cors_rule(const service_properties::cors_rule& rule);
+        void write_retention_policy(bool enabled, int days);
     };
 
-}}} // namespace wa::storage::protocol
+    class service_stats_reader : public core::xml::xml_reader
+    {
+    public:
+
+        explicit service_stats_reader(concurrency::streams::istream stream)
+            : xml_reader(stream)
+        {
+        }
+
+        service_stats move_stats()
+        {
+            parse();
+            return std::move(m_service_stats);
+        }
+
+    protected:
+
+        virtual void handle_element(const utility::string_t& element_name);
+
+        service_stats m_service_stats;
+
+    private:
+
+        void handle_geo_replication_status(const utility::string_t& element_name);
+    };
+
+}}} // namespace azure::storage::protocol
